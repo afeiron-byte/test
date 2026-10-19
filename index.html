@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>에코 마스터 대시보드 - 우리 동네 환경 탐구</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Pretendard Font -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f0fdf4;
+            background-image: radial-gradient(#bbf7d0 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .aspect-16-9-container {
+            width: 100%;
+            max-width: 177.78vh;
+            height: 100vh;
+            max-height: 56.25vw;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+        }
+        @media (max-width: 1024px) {
+            .aspect-16-9-container {
+                height: auto;
+                max-height: none;
+                max-width: 100%;
+                overflow: visible;
+            }
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .sensor-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sensor-card:hover { transform: translateY(-2px); }
+        .sensor-card.active {
+            border-color: #10b981;
+            background-color: #ecfdf5;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+        .pin-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen text-slate-800 select-none">
+
+    <!-- 스프레드시트 A1셀('2026') 인증 및 잠금 오버레이 -->
+    <div id="access-gate-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-emerald-950/80 backdrop-blur-md p-4 transition-opacity duration-300">
+        <!-- 확인 중 상태 -->
+        <div id="gate-loading" class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-emerald-100 flex flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                <i data-lucide="loader-2" class="w-8 h-8 animate-spin"></i>
+            </div>
+            <h2 class="text-lg font-extrabold text-slate-800">탐구활동지 접속 확인 중</h2>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">구글 스프레드시트(시트1 A1셀)의<br>활성화 코드(2026)를 확인하고 있습니다...</p>
+        </div>
+
+        <!-- 잠금 상태 (2026이 아닐 때 또는 통신 실패 시) -->
+        <div id="gate-locked" class="hidden bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-rose-100 flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                <i data-lucide="lock" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-lg font-extrabold text-slate-800">현재 탐구활동지가 비활성화되어 있습니다</h2>
+            <p id="gate-error-msg" class="text-xs text-slate-500 mt-2 leading-relaxed">
+                연결된 구글 스프레드시트 <strong>'시트1'의 A1셀</strong>에 <strong class="text-emerald-600">2026</strong>이 입력되어 있어야 작동합니다.<br>선생님께 활성화 여부를 문의하거나 아래 다시 확인 버튼을 눌러주세요.
+            </p>
+            <div id="gate-status-detail" class="mt-3 px-3 py-1.5 bg-slate-100 rounded-lg text-[11px] font-mono text-slate-500 w-full truncate">
+                상태 확인 대기 중
+            </div>
+            <button onclick="verifySpreadsheetAccess()" class="mt-5 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3 px-5 rounded-xl shadow-md shadow-emerald-200 transition-all">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> 다시 확인하기
+            </button>
+        </div>
+    </div>
+
+    <!-- 커스텀 알림 토스트 (alert 대체용) -->
+    <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold transition-all">
+        <i data-lucide="bell" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+        <span id="toast-message">알림 메시지</span>
+    </div>
+
+    <!-- 메인 대시보드 컨테이너 (인증 전에는 클릭 방지 및 블러 처리) -->
+    <div id="main-dashboard-container" class="aspect-16-9-container lg:rounded-2xl border border-emerald-100 pointer-events-none select-none filter blur-sm transition-all duration-300">
+        
+        <!-- 상단 헤더 -->
+        <header class="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-100 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-200">
+                    <i data-lucide="leaf" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold text-emerald-950 tracking-tight leading-none">에코 마스터 대시보드</h1>
+                    <p class="text-xs text-slate-500 font-medium mt-1">우리 동네 환경 탐구 프로젝트</p>
+                </div>
+            </div>
+
+            <!-- 중앙 탭 네비게이션 -->
+            <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+                <button onclick="switchTab('tab-builder')" id="btn-tab-builder" class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all bg-white text-emerald-700 shadow-sm">
+                    <i data-lucide="wrench" class="w-4 h-4"></i> 1. 센서 조립소
+                </button>
+                <button onclick="switchTab('tab-station')" id="btn-tab-station" class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all text-slate-500 hover:text-slate-800">
+                    <i data-lucide="activity" class="w-4 h-4"></i> 2. 실시간 관측소
+                </button>
+            </div>
+
+            <!-- 우측 탐구 보고서 버튼 (요청하신 사이트로 연결) -->
+            <div>
+                <a href="https://afeiron-byte.github.io/seil-report002/" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm shadow-indigo-200 transition-all">
+                    <i data-lucide="file-text" class="w-4 h-4"></i> 탐구 보고서 작성
+                </a>
+            </div>
+        </header>
+
+        <!-- ==================== 탭 1: 센서 조립소 ==================== -->
+        <main id="tab-builder" class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-5 overflow-hidden">
+            
+            <!-- 1열: 센서 선택 (3칸) -->
+            <section class="lg:col-span-3 flex flex-col bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm overflow-hidden">
+                <div class="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 shrink-0">
+                    <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-xs flex items-center justify-center">1</span>
+                    <h2 class="font-bold text-slate-800 text-sm">탐구할 센서 선택</h2>
+                    <span class="ml-auto text-[11px] text-slate-400 font-medium">중복 선택 가능</span>
+                </div>
+
+                <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                    <!-- AM1008W-K -->
+                    <div onclick="toggleSensor('am1008')" id="card-am1008" class="sensor-card active cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
+                        <div class="p-2 rounded-lg bg-teal-100 text-teal-600 shrink-0 mt-0.5"><i data-lucide="wind" class="w-5 h-5"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-sm text-slate-800">복합 공기질 센서</h3>
+                                <input type="checkbox" id="chk-am1008" checked class="w-4 h-4 accent-emerald-600 pointer-events-none">
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">AM1008W-K (I2C 통신)</p>
+                            <div class="flex flex-wrap gap-1 mt-1.5">
+                                <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold">미세먼지(PM2.5)</span>
+                                <span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">CO2</span>
+                                <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">VOC</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SEN0161 pH -->
+                    <div onclick="toggleSensor('ph')" id="card-ph" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
+                        <div class="p-2 rounded-lg bg-purple-100 text-purple-600 shrink-0 mt-0.5"><i data-lucide="flask-conical" class="w-5 h-5"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-sm text-slate-800">수질(pH) 센서</h3>
+                                <input type="checkbox" id="chk-ph" class="w-4 h-4 accent-emerald-600 pointer-events-none">
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">SEN0161 (아날로그)</p>
+                            <p class="text-[11px] text-slate-400 mt-1">용액의 산성/염기성 오염도 측정</p>
+                        </div>
+                    </div>
+
+                    <!-- DS18B20 방수온도 -->
+                    <div onclick="toggleSensor('ds18b20')" id="card-ds18b20" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
+                        <div class="p-2 rounded-lg bg-indigo-100 text-indigo-600 shrink-0 mt-0.5"><i data-lucide="waves" class="w-5 h-5"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-sm text-slate-800">방수형 온도 센서</h3>
+                                <input type="checkbox" id="chk-ds18b20" class="w-4 h-4 accent-emerald-600 pointer-events-none">
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">DS18B20 (터미널 모듈)</p>
+                            <p class="text-[11px] text-slate-400 mt-1">하천, 수조 등의 정밀 수온 측정</p>
+                        </div>
+                    </div>
+
+                    <!-- SZH-EK024 온습도 -->
+                    <div onclick="toggleSensor('dht')" id="card-dht" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
+                        <div class="p-2 rounded-lg bg-orange-100 text-orange-600 shrink-0 mt-0.5"><i data-lucide="thermometer-sun" class="w-5 h-5"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-sm text-slate-800">대기 온습도 센서</h3>
+                                <input type="checkbox" id="chk-dht" class="w-4 h-4 accent-emerald-600 pointer-events-none">
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">SZH-EK024 (DHT11)</p>
+                            <p class="text-[11px] text-slate-400 mt-1">주변 공기의 온도와 습도 측정</p>
+                        </div>
+                    </div>
+
+                    <!-- NEO-6M GPS -->
+                    <div onclick="toggleSensor('gps')" id="card-gps" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
+                        <div class="p-2 rounded-lg bg-blue-100 text-blue-600 shrink-0 mt-0.5"><i data-lucide="satellite" class="w-5 h-5"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-sm text-slate-800">GPS 위치 모듈</h3>
+                                <input type="checkbox" id="chk-gps" class="w-4 h-4 accent-emerald-600 pointer-events-none">
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">GY-GPS6MV2 (NEO-6M)</p>
+                            <p class="text-[11px] text-slate-400 mt-1">측정 장소의 위도·경도 좌표 기록</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2열: 회로 연결 가이드 & 필수 라이브러리 (5칸) -->
+            <section class="lg:col-span-5 flex flex-col gap-4 overflow-hidden">
+                <!-- 회로 연결 가이드 -->
+                <div class="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm overflow-hidden">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-100 shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-700 font-extrabold text-xs flex items-center justify-center">2</span>
+                            <h2 class="font-bold text-slate-800 text-sm">회로 연결 가이드 (센서 ➔ 아두이노)</h2>
+                        </div>
+                        <span class="text-[11px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">5V / GND는 브레드보드 공유</span>
+                    </div>
+                    <div id="wiring-guide" class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                        <!-- JS 렌더링 -->
+                    </div>
+                </div>
+
+                <!-- 라이브러리 설치 안내 -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm shrink-0">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="package-check" class="w-4 h-4 text-indigo-600"></i>
+                            <h3 class="font-bold text-slate-800 text-xs">설치 필요 라이브러리 (아두이노 IDE 라이브러리 매니저)</h3>
+                        </div>
+                    </div>
+                    <div id="lib-guide" class="flex flex-wrap gap-2">
+                        <!-- JS 렌더링 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3열: 자동 생성 아두이노 코드 (4칸) -->
+            <section class="lg:col-span-4 flex flex-col bg-slate-900 rounded-2xl border border-slate-800 p-4 shadow-sm overflow-hidden text-slate-100">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800 shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold text-xs flex items-center justify-center">3</span>
+                        <h2 class="font-bold text-white text-sm">맞춤형 아두이노 코드</h2>
+                    </div>
+                    <button onclick="copyCode()" id="btn-copy" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i> 코드 복사
+                    </button>
+                </div>
+                <pre class="flex-1 overflow-auto text-xs font-mono leading-relaxed text-emerald-300 select-all p-2 bg-slate-950/60 rounded-xl"><code id="arduino-code"></code></pre>
+            </section>
+
+        </main>
+
+        <!-- ==================== 탭 2: 실시간 관측소 ==================== -->
+        <main id="tab-station" class="hidden flex-1 flex-col gap-3 p-5 overflow-hidden">
+            
+            <!-- 상단 컨트롤 바 -->
+            <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-sm shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <!-- 통신 속도(Baudrate) 선택 -->
+                    <div class="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                        <span class="text-[11px] font-bold text-slate-500">통신속도:</span>
+                        <select id="baudRateSelect" class="bg-transparent text-xs font-extrabold text-slate-800 focus:outline-none cursor-pointer">
+                            <option value="9600" selected>9600 bps (기본)</option>
+                            <option value="115200">115200 bps</option>
+                        </select>
+                    </div>
+
+                    <button id="connectBtn" onclick="toggleArduinoConnection()" class="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-all">
+                        <i data-lucide="usb" class="w-4 h-4"></i> <span id="connectBtnText">아두이노 연결하기</span>
+                    </button>
+                    <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                        <span id="statusDot" class="w-2 h-2 rounded-full bg-rose-500"></span>
+                        <span id="statusText">연결 대기 중</span>
+                    </div>
+                    <button onclick="clearAllData()" class="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition-all">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 초기화
+                    </button>
+                </div>
+
+                <!-- 실시간 원본 시리얼 수신 확인 모니터 -->
+                <div class="flex items-center gap-2 bg-slate-900 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-mono max-w-md truncate border border-slate-700">
+                    <span class="text-slate-400 font-sans font-bold text-[11px] shrink-0">수신 데이터:</span>
+                    <span id="rawSerialMonitor" class="truncate">아두이노 연결 대기 중...</span>
+                </div>
+            </div>
+
+            <!-- 실시간 센서 측정값 요약 카드 (7열) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2.5 shrink-0">
+                <!-- PM2.5 -->
+                <div class="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-slate-500">미세먼지 (PM2.5)</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-pm25" class="text-2xl font-extrabold text-slate-800 font-mono">--</span>
+                        <span class="text-xs font-semibold text-slate-500">µg/m³</span>
+                    </div>
+                    <i data-lucide="cloud-fog" class="w-8 h-8 text-slate-200 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- CO2 -->
+                <div class="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-emerald-700">이산화탄소 (CO2)</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-co2" class="text-2xl font-extrabold text-emerald-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-emerald-700">ppm</span>
+                    </div>
+                    <i data-lucide="cloud" class="w-8 h-8 text-emerald-200/70 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- VOC -->
+                <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-amber-700">유기화합물 (VOC)</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-voc" class="text-2xl font-extrabold text-amber-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-amber-700">Lv</span>
+                    </div>
+                    <i data-lucide="sparkles" class="w-8 h-8 text-amber-200/70 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- pH -->
+                <div class="bg-purple-50/80 border border-purple-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-purple-700">수질 (pH)</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-ph" class="text-2xl font-extrabold text-purple-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-purple-700">pH</span>
+                    </div>
+                    <i data-lucide="flask-conical" class="w-8 h-8 text-purple-200/70 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- 대기 온도 -->
+                <div class="bg-orange-50/80 border border-orange-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-orange-700">현재 온도</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-temp" class="text-2xl font-extrabold text-orange-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-orange-700">°C</span>
+                    </div>
+                    <i data-lucide="thermometer" class="w-8 h-8 text-orange-200/70 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- 대기 습도 -->
+                <div class="bg-sky-50/80 border border-sky-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-sky-700">현재 습도</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-humi" class="text-2xl font-extrabold text-sky-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-sky-700">%</span>
+                    </div>
+                    <i data-lucide="droplets" class="w-8 h-8 text-sky-200/70 absolute right-2 bottom-1"></i>
+                </div>
+                <!-- 방수 수온 -->
+                <div class="bg-indigo-50/80 border border-indigo-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
+                    <span class="text-[11px] font-bold text-indigo-700">수온 (방수 온도)</span>
+                    <div class="my-1 flex items-baseline gap-1">
+                        <span id="val-wtemp" class="text-2xl font-extrabold text-indigo-900 font-mono">--</span>
+                        <span class="text-xs font-semibold text-indigo-700">°C</span>
+                    </div>
+                    <i data-lucide="waves" class="w-8 h-8 text-indigo-200/70 absolute right-2 bottom-1"></i>
+                </div>
+            </div>
+
+            <!-- 하단 그래프 및 GPS 영역 -->
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
+                
+                <!-- 그래프 1: 대기/수질 오염도 -->
+                <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col min-h-0">
+                    <div class="flex items-center justify-between mb-2 shrink-0">
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-600"></i>
+                            <h3 class="font-bold text-xs text-slate-800">실시간 대기/수질 오염도</h3>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="downloadCSV('pollution')" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all">
+                                <i data-lucide="file-spreadsheet" class="w-3 h-3 text-emerald-600"></i> CSV
+                            </button>
+                            <button onclick="downloadChartImage('pollutionChart', '오염도_그래프.png')" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all">
+                                <i data-lucide="image" class="w-3 h-3 text-indigo-600"></i> 이미지
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative min-h-0">
+                        <canvas id="pollutionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 그래프 2: 온습도/수온 변화 -->
+                <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col min-h-0">
+                    <div class="flex items-center justify-between mb-2 shrink-0">
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="thermometer-sun" class="w-4 h-4 text-orange-500"></i>
+                            <h3 class="font-bold text-xs text-slate-800">실시간 온습도/수온 변화</h3>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="downloadCSV('climate')" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all">
+                                <i data-lucide="file-spreadsheet" class="w-3 h-3 text-emerald-600"></i> CSV
+                            </button>
+                            <button onclick="downloadChartImage('climateChart', '온습도_수온_그래프.png')" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-all">
+                                <i data-lucide="image" class="w-3 h-3 text-indigo-600"></i> 이미지
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative min-h-0">
+                        <canvas id="climateChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 우측: GPS 위치 정보 패널 -->
+                <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col justify-between min-h-0">
+                    <div>
+                        <div class="flex items-center gap-1.5 mb-3 pb-2 border-b border-slate-100">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-blue-600"></i>
+                            <h3 class="font-bold text-xs text-slate-800">GPS 관측 위치</h3>
+                        </div>
+                        <div class="space-y-2.5">
+                            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div class="text-[10px] font-bold text-slate-400">위도 (Latitude)</div>
+                                <div id="val-lat" class="text-sm font-extrabold text-slate-800 font-mono mt-0.5">수신 대기중</div>
+                            </div>
+                            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                <div class="text-[10px] font-bold text-slate-400">경도 (Longitude)</div>
+                                <div id="val-lng" class="text-sm font-extrabold text-slate-800 font-mono mt-0.5">수신 대기중</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 mt-3">
+                        <button onclick="openGoogleMaps()" class="w-full flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 py-2 rounded-xl text-xs font-bold transition-all border border-blue-200">
+                            <i data-lucide="compass" class="w-3.5 h-3.5"></i> 구글 지도에서 보기
+                        </button>
+                        <button onclick="downloadCSV('all')" class="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-bold transition-all shadow-sm">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> 전체 데이터 CSV 저장
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // 커스텀 토스트 메시지 표시 함수 (alert 대체)
+        let toastTimeout = null;
+        function showNotification(message) {
+            const toast = document.getElementById('toast-notification');
+            const msgSpan = document.getElementById('toast-message');
+            msgSpan.textContent = message;
+            toast.classList.remove('hidden');
+            toast.classList.add('flex');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.remove('flex');
+            }, 3500);
+        }
+
+        // ==================== 구글 스프레드시트 '시트1' A1셀('2026') 확인 로직 ====================
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzIk47D9_UDHYOVLGaSR7VMaNlOXGphI-NFLYXzKwVJRrUDegBbsDHPgRav2AesrWZy/exec";
+        let isDashboardUnlocked = false;
+
+        // 응답 데이터에서 시트1 A1셀의 값 또는 '2026' 포함 여부를 판별하는 헬퍼 함수
+        function checkIs2026(data) {
+            if (data === null || data === undefined) return false;
+            if (typeof data === 'number') return data === 2026;
+            if (typeof data === 'string') {
+                const trimmed = data.trim();
+                if (trimmed === '2026') return true;
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    return checkIs2026(parsed);
+                } catch (_) {
+                    return false;
+                }
+            }
+            if (Array.isArray(data)) {
+                if (data.length > 0) return checkIs2026(data[0]);
+                return false;
+            }
+            if (typeof data === 'object') {
+                // 시트1 또는 A1 키가 명시된 경우 우선 확인
+                if ('시트1' in data) return checkIs2026(data['시트1']);
+                if ('A1' in data) return checkIs2026(data['A1']);
+                if ('a1' in data) return checkIs2026(data['a1']);
+                if ('value' in data) return checkIs2026(data['value']);
+                if ('result' in data) return checkIs2026(data['result']);
+                if ('data' in data) return checkIs2026(data['data']);
+                // 객체의 값들 중 하나라도 2026인지 확인
+                return Object.values(data).some(v => checkIs2026(v));
+            }
+            return false;
+        }
+
+        async function verifySpreadsheetAccess() {
+            const overlay = document.getElementById('access-gate-overlay');
+            const loadingBox = document.getElementById('gate-loading');
+            const lockedBox = document.getElementById('gate-locked');
+            const statusDetail = document.getElementById('gate-status-detail');
+            const mainContainer = document.getElementById('main-dashboard-container');
+
+            overlay.classList.remove('hidden');
+            loadingBox.classList.remove('hidden');
+            loadingBox.classList.add('flex');
+            lockedBox.classList.add('hidden');
+            lockedBox.classList.remove('flex');
+
+            try {
+                // 캐시 방지를 위한 타임스탬프 및 시트/셀 파라미터 전달
+                const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent('시트1')}&cell=A1&t=${Date.now()}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP 응답 오류 (${response.status})`);
+                }
+
+                const rawText = await response.text();
+                const authorized = checkIs2026(rawText);
+
+                if (authorized) {
+                    isDashboardUnlocked = true;
+                    overlay.classList.add('hidden');
+                    mainContainer.classList.remove('pointer-events-none', 'select-none', 'blur-sm');
+                    renderBuilder();
+                } else {
+                    isDashboardUnlocked = false;
+                    loadingBox.classList.add('hidden');
+                    loadingBox.classList.remove('flex');
+                    lockedBox.classList.remove('hidden');
+                    lockedBox.classList.add('flex');
+                    const preview = rawText ? rawText.replace(/\s+/g, ' ').slice(0, 60) : '빈 값';
+                    statusDetail.textContent = `현재 수신된 값: ${preview}`;
+                }
+            } catch (err) {
+                console.error('스프레드시트 확인 오류:', err);
+                isDashboardUnlocked = false;
+                loadingBox.classList.add('hidden');
+                loadingBox.classList.remove('flex');
+                lockedBox.classList.remove('hidden');
+                lockedBox.classList.add('flex');
+                statusDetail.textContent = `확인 실패: ${err.message}`;
+            }
+        }
+
+        // ==================== 센서 조립소 및 탭 제어 ====================
+        const selectedSensors = {
+            am1008: true,
+            ph: false,
+            ds18b20: false,
+            dht: false,
+            gps: false
+        };
+
+        function switchTab(tabId) {
+            if (!isDashboardUnlocked) return;
+            const builder = document.getElementById('tab-builder');
+            const station = document.getElementById('tab-station');
+            const btnBuilder = document.getElementById('btn-tab-builder');
+            const btnStation = document.getElementById('btn-tab-station');
+
+            if (tabId === 'tab-builder') {
+                builder.classList.remove('hidden');
+                station.classList.add('hidden');
+                station.classList.remove('flex');
+                btnBuilder.className = "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all bg-white text-emerald-700 shadow-sm";
+                btnStation.className = "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all text-slate-500 hover:text-slate-800";
+            } else {
+                builder.classList.add('hidden');
+                station.classList.remove('hidden');
+                station.classList.add('flex');
+                btnStation.className = "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all bg-white text-emerald-700 shadow-sm";
+                btnBuilder.className = "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all text-slate-500 hover:text-slate-800";
+                updateChartAxesVisibility();
+            }
+        }
+
+        function toggleSensor(key) {
+            if (!isDashboardUnlocked) return;
+            selectedSensors[key] = !selectedSensors[key];
+            const card = document.getElementById(`card-${key}`);
+            const chk = document.getElementById(`chk-${key}`);
+            chk.checked = selectedSensors[key];
+            if (selectedSensors[key]) {
+                card.classList.add('active');
+            } else {
+                card.classList.remove('active');
+            }
+            renderBuilder();
+            updateChartAxesVisibility();
+        }
+
+        function renderBuilder() {
+            const wiringContainer = document.getElementById('wiring-guide');
+            const libContainer = document.getElementById('lib-guide');
+            const codeContainer = document.getElementById('arduino-code');
+
+            let wiringHTML = '';
+            let libs = [];
+
+            if (!Object.values(selectedSensors).some(Boolean)) {
+                wiringHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+                    <p class="text-xs font-semibold">왼쪽에서 사용할 센서를 1개 이상 선택해 주세요.</p>
+                </div>`;
+            }
+
+            if (selectedSensors.am1008) {
+                libs.push({ name: 'AM1008W_K_I2C', desc: '복합 공기질 센서 I2C 제어' });
+                wiringHTML += `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                        <span class="font-bold text-xs text-slate-800">복합 공기질 (I2C)</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 justify-end">
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>빨강(VCC) ➔ <strong class="text-blue-600">5V</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>검정(GND) ➔ <strong class="text-blue-600">GND</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-white border border-slate-400"></span>흰색(SDA) ➔ <strong class="text-blue-600">A4 (SDA)</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>초록(SCL) ➔ <strong class="text-blue-600">A5 (SCL)</strong></span>
+                    </div>
+                </div>`;
+            }
+
+            if (selectedSensors.ph) {
+                wiringHTML += `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                        <span class="font-bold text-xs text-slate-800">수질(pH)</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 justify-end">
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>VCC ➔ <strong class="text-blue-600">5V</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>GND ➔ <strong class="text-blue-600">GND</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>DATA ➔ <strong class="text-blue-600">A0</strong></span>
+                    </div>
+                </div>`;
+            }
+
+            if (selectedSensors.ds18b20) {
+                libs.push({ name: 'OneWire', desc: '1-Wire 통신용' });
+                libs.push({ name: 'DallasTemperature', desc: 'DS18B20 온도 계산용' });
+                wiringHTML += `
+                <div class="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200/80 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                            <span class="font-bold text-xs text-slate-800">방수 온도 (DS18B20)</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 justify-end">
+                            <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>VCC ➔ <strong class="text-blue-600">5V</strong></span>
+                            <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>GND ➔ <strong class="text-blue-600">GND</strong></span>
+                            <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>DAT ➔ <strong class="text-blue-600">D5</strong></span>
+                        </div>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-indigo-100">
+                        <div class="text-[11px] font-bold text-indigo-700 mb-1 flex items-center gap-1">
+                            <span>ⓘ 터미널 모듈 연결 안내 (풀업 저항 내장형)</span>
+                        </div>
+                        <svg viewBox="0 0 500 115" class="w-full h-auto">
+                            <rect x="10" y="42" width="110" height="28" rx="14" fill="#94a3b8" stroke="#64748b" stroke-width="2"/>
+                            <rect x="110" y="40" width="55" height="32" fill="#334155"/>
+                            <path d="M 165 56 C 215 56, 215 15, 250 15 C 285 15, 285 95, 320 95 C 350 95, 350 56, 375 56" fill="none" stroke="#334155" stroke-width="10" stroke-linecap="round"/>
+                            <line x1="375" y1="42" x2="405" y2="42" stroke="#eab308" stroke-width="3.5"/>
+                            <line x1="375" y1="56" x2="405" y2="56" stroke="#ef4444" stroke-width="3.5"/>
+                            <line x1="375" y1="70" x2="405" y2="70" stroke="#1e293b" stroke-width="3.5"/>
+                            <rect x="395" y="12" width="85" height="90" rx="8" fill="#1e293b"/>
+                            <text x="437" y="24" fill="#cbd5e1" font-size="7" text-anchor="middle" font-weight="bold">Pluggable Terminal</text>
+                            <rect x="405" y="30" width="26" height="52" fill="#22c55e" stroke="#15803d" stroke-width="1.5"/>
+                            <circle cx="418" cy="42" r="4.5" fill="#cbd5e1"/><line x1="415" y1="42" x2="421" y2="42" stroke="#475569" stroke-width="1.5"/>
+                            <circle cx="418" cy="56" r="4.5" fill="#cbd5e1"/><line x1="415" y1="56" x2="421" y2="56" stroke="#475569" stroke-width="1.5"/>
+                            <circle cx="418" cy="70" r="4.5" fill="#cbd5e1"/><line x1="415" y1="70" x2="421" y2="70" stroke="#475569" stroke-width="1.5"/>
+                            <text x="458" y="45" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">DAT</text>
+                            <text x="458" y="59" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">VCC</text>
+                            <text x="458" y="73" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">GND</text>
+                            <line x1="463" y1="42" x2="495" y2="42" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
+                            <line x1="463" y1="56" x2="495" y2="56" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
+                            <line x1="463" y1="70" x2="495" y2="70" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                </div>`;
+            }
+
+            if (selectedSensors.dht) {
+                libs.push({ name: 'DHT sensor library', desc: 'Adafruit 온습도 라이브러리' });
+                wiringHTML += `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                        <span class="font-bold text-xs text-slate-800">대기 온습도</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 justify-end">
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>VCC ➔ <strong class="text-blue-600">5V</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>GND ➔ <strong class="text-blue-600">GND</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>DATA ➔ <strong class="text-blue-600">D2</strong></span>
+                    </div>
+                </div>`;
+            }
+
+            if (selectedSensors.gps) {
+                libs.push({ name: 'TinyGPSPlus', desc: 'GPS 좌표 해석 라이브러리' });
+                wiringHTML += `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                        <span class="font-bold text-xs text-slate-800">GPS 모듈</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 justify-end">
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>VCC ➔ <strong class="text-blue-600">5V</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>GND ➔ <strong class="text-blue-600">GND</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>TX ➔ <strong class="text-blue-600">D3</strong></span>
+                        <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>RX ➔ <strong class="text-blue-600">D4</strong></span>
+                    </div>
+                </div>`;
+            }
+
+            wiringContainer.innerHTML = wiringHTML;
+
+            if (libs.length === 0) {
+                libContainer.innerHTML = `<span class="text-xs text-slate-400">별도 설치할 외부 라이브러리가 없습니다.</span>`;
+            } else {
+                libContainer.innerHTML = libs.map(l => `
+                    <div class="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-900 px-2.5 py-1 rounded-lg text-xs font-bold">
+                        <span>📦 ${l.name}</span>
+                        <span class="text-[10px] font-medium text-indigo-600">(${l.desc})</span>
+                    </div>
+                `).join('');
+            }
+
+            codeContainer.textContent = generateArduinoSketch();
+        }
+
+        // 아두이노 코드 생성 (Wire.h 명시 및 표준 9600 보드레이트 적용)
+        function generateArduinoSketch() {
+            let code = `// [우리 동네 환경 탐구] 맞춤형 아두이노 코드\n`;
+            code += `// 시리얼 통신 속도: 9600 bps\n\n`;
+
+            if (selectedSensors.am1008) {
+                code += `#include <Wire.h>\n#include <am1008w_k_i2c.h>\nAM1008W_K_I2C am1008w_k;\n`;
+            }
+            if (selectedSensors.dht) {
+                code += `#include <DHT.h>\n#define DHTPIN 2\n#define DHTTYPE DHT11\nDHT dht(DHTPIN, DHTTYPE);\n`;
+            }
+            if (selectedSensors.ds18b20) {
+                code += `#include <OneWire.h>\n#include <DallasTemperature.h>\n#define ONE_WIRE_BUS 5\nOneWire oneWire(ONE_WIRE_BUS);\nDallasTemperature waterSensor(&oneWire);\n`;
+            }
+            if (selectedSensors.gps) {
+                code += `#include <SoftwareSerial.h>\n#include <TinyGPS++.h>\nSoftwareSerial gpsSerial(3, 4); // TX->D3, RX->D4\nTinyGPSPlus gps;\n`;
+            }
+            if (selectedSensors.ph) {
+                code += `#define PH_PIN A0\n`;
+            }
+
+            code += `\nvoid setup() {\n  Serial.begin(9600);\n`;
+            if (selectedSensors.am1008) code += `  Wire.begin();\n  am1008w_k.begin();\n`;
+            if (selectedSensors.dht) code += `  dht.begin();\n`;
+            if (selectedSensors.ds18b20) code += `  waterSensor.begin();\n`;
+            if (selectedSensors.gps) code += `  gpsSerial.begin(9600);\n`;
+            code += `}\n\nvoid loop() {\n`;
+
+            if (selectedSensors.gps) {
+                code += `  while (gpsSerial.available() > 0) {\n    gps.encode(gpsSerial.read());\n  }\n`;
+            }
+            if (selectedSensors.am1008) {
+                code += `  uint8_t ret = am1008w_k.read_data_command();\n`;
+            }
+            if (selectedSensors.ds18b20) {
+                code += `  waterSensor.requestTemperatures();\n`;
+            }
+
+            code += `\n  // 웹사이트로 JSON 데이터 전송\n  Serial.print("{");\n`;
+
+            let fields = [];
+            if (selectedSensors.am1008) {
+                fields.push(`  Serial.print("\\"pm25\\":"); Serial.print(ret == 0 ? am1008w_k.get_pm2p5() : 0);`);
+                fields.push(`  Serial.print(",\\"co2\\":"); Serial.print(ret == 0 ? am1008w_k.get_co2() : 0);`);
+                fields.push(`  Serial.print(",\\"voc\\":"); Serial.print(ret == 0 ? am1008w_k.get_voc() : 0);`);
+            }
+            if (selectedSensors.ph) {
+                code += `  int phRaw = analogRead(PH_PIN);\n  float voltage = phRaw * 5.0 / 1024.0;\n  float phValue = 3.5 * voltage;\n`;
+                fields.push(`  Serial.print("${fields.length > 0 ? ',' : ''}\\"ph\\":"); Serial.print(phValue, 2);`);
+            }
+            if (selectedSensors.dht) {
+                code += `  float t = dht.readTemperature();\n  float h = dht.readHumidity();\n`;
+                fields.push(`  Serial.print("${fields.length > 0 ? ',' : ''}\\"temp\\":"); Serial.print(isnan(t) ? 0 : t, 1);`);
+                fields.push(`  Serial.print(",\\"humi\\":"); Serial.print(isnan(h) ? 0 : h, 1);`);
+            }
+            if (selectedSensors.ds18b20) {
+                code += `  float wt = waterSensor.getTempCByIndex(0);\n`;
+                fields.push(`  Serial.print("${fields.length > 0 ? ',' : ''}\\"wtemp\\":"); Serial.print(wt == DEVICE_DISCONNECTED_C ? 0 : wt, 1);`);
+            }
+            if (selectedSensors.gps) {
+                fields.push(`  Serial.print("${fields.length > 0 ? ',' : ''}\\"lat\\":"); Serial.print(gps.location.isValid() ? gps.location.lat() : 0.0, 6);`);
+                fields.push(`  Serial.print(",\\"lng\\":"); Serial.print(gps.location.isValid() ? gps.location.lng() : 0.0, 6);`);
+            }
+
+            code += fields.join('\n') + `\n  Serial.println("}");\n  delay(1000);\n}`;
+            return code;
+        }
+
+        function copyCode() {
+            if (!isDashboardUnlocked) return;
+            const code = document.getElementById('arduino-code').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const btn = document.getElementById('btn-copy');
+                btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 복사 완료!`;
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> 코드 복사`;
+                    lucide.createIcons();
+                }, 2000);
+            });
+        }
+
+        // ==================== 차트 설정 (Chart.js) ====================
+        const whiteBgPlugin = {
+            id: 'customCanvasBackgroundColor',
+            beforeDraw: (chart) => {
+                const { ctx } = chart;
+                ctx.save();
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, chart.width, chart.height);
+                ctx.restore();
+            }
+        };
+
+        const pollutionCtx = document.getElementById('pollutionChart').getContext('2d');
+        const pollutionChart = new Chart(pollutionCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: '미세먼지 (µg/m³)', borderColor: '#64748b', backgroundColor: '#64748b', data: [], yAxisID: 'y', borderWidth: 2, pointRadius: 2, tension: 0.2 },
+                    { label: 'CO2 (ppm)', borderColor: '#10b981', backgroundColor: '#10b981', data: [], yAxisID: 'y2', borderWidth: 2, pointRadius: 2, tension: 0.2 },
+                    { label: 'VOC (Lv)', borderColor: '#f59e0b', backgroundColor: '#f59e0b', data: [], yAxisID: 'y', borderDash: [5, 5], borderWidth: 2, pointRadius: 2, tension: 0.2 },
+                    { label: '수질 (pH)', borderColor: '#a855f7', backgroundColor: '#a855f7', data: [], yAxisID: 'yPh', borderWidth: 2, pointRadius: 2, tension: 0.2 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { font: { size: 10 } } },
+                    y: {
+                        type: 'linear', position: 'left',
+                        title: { display: true, text: '미세먼지(µg/m³) / VOC(Lv)', font: { size: 10, weight: 'bold' }, color: '#475569' },
+                        suggestedMin: 0, suggestedMax: 50
+                    },
+                    y2: {
+                        type: 'linear', position: 'right',
+                        title: { display: true, text: 'CO2 (ppm)', font: { size: 10, weight: 'bold' }, color: '#059669' },
+                        grid: { drawOnChartArea: false },
+                        suggestedMin: 400, suggestedMax: 1000
+                    },
+                    yPh: {
+                        type: 'linear', position: 'left', display: false,
+                        title: { display: true, text: '수질 (pH)', font: { size: 10, weight: 'bold' }, color: '#9333ea' },
+                        min: 0, max: 14
+                    }
+                }
+            },
+            plugins: [whiteBgPlugin]
+        });
+
+        const climateCtx = document.getElementById('climateChart').getContext('2d');
+        const climateChart = new Chart(climateCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: '대기 온도 (°C)', borderColor: '#f97316', backgroundColor: '#f97316', data: [], yAxisID: 'yTemp', borderWidth: 2, pointRadius: 2, tension: 0.2 },
+                    { label: '수온 (°C)', borderColor: '#6366f1', backgroundColor: '#6366f1', data: [], yAxisID: 'yTemp', borderDash: [5, 5], borderWidth: 2, pointRadius: 2, tension: 0.2 },
+                    { label: '습도 (%)', borderColor: '#0ea5e9', backgroundColor: '#0ea5e9', data: [], yAxisID: 'yHumi', borderWidth: 2, pointRadius: 2, tension: 0.2 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { font: { size: 10 } } },
+                    yTemp: {
+                        type: 'linear', position: 'left',
+                        title: { display: true, text: '온도 / 수온 (°C)', font: { size: 10, weight: 'bold' }, color: '#ea580c' },
+                        suggestedMin: 15, suggestedMax: 35
+                    },
+                    yHumi: {
+                        type: 'linear', position: 'right',
+                        title: { display: true, text: '습도 (%)', font: { size: 10, weight: 'bold' }, color: '#0284c7' },
+                        grid: { drawOnChartArea: false },
+                        min: 0, max: 100
+                    }
+                }
+            },
+            plugins: [whiteBgPlugin]
+        });
+
+        function updateChartAxesVisibility() {
+            pollutionChart.data.datasets[0].hidden = !selectedSensors.am1008;
+            pollutionChart.data.datasets[1].hidden = !selectedSensors.am1008;
+            pollutionChart.data.datasets[2].hidden = !selectedSensors.am1008;
+            pollutionChart.data.datasets[3].hidden = !selectedSensors.ph;
+
+            pollutionChart.options.scales.y.display = selectedSensors.am1008;
+            pollutionChart.options.scales.y2.display = selectedSensors.am1008;
+            pollutionChart.options.scales.yPh.display = selectedSensors.ph;
+            pollutionChart.update();
+
+            climateChart.data.datasets[0].hidden = !selectedSensors.dht;
+            climateChart.data.datasets[1].hidden = !selectedSensors.ds18b20;
+            climateChart.data.datasets[2].hidden = !selectedSensors.dht;
+
+            climateChart.options.scales.yTemp.display = (selectedSensors.dht || selectedSensors.ds18b20);
+            climateChart.options.scales.yHumi.display = selectedSensors.dht;
+            climateChart.update();
+        }
+
+        // ==================== 아두이노 시리얼 통신 ====================
+        let port = null;
+        let reader = null;
+        let readableStreamClosed = null;
+        let keepReading = false;
+        const maxDataPoints = 40;
+        let dataHistory = [];
+        let fallbackData = {};
+
+        async function toggleArduinoConnection() {
+            if (!isDashboardUnlocked) return;
+            if (port) {
+                await disconnectArduino();
+            } else {
+                await connectArduino();
+            }
+        }
+
+        async function connectArduino() {
+            try {
+                const selectedBaud = parseInt(document.getElementById('baudRateSelect').value, 10);
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: selectedBaud });
+
+                document.getElementById('connectBtnText').textContent = '연결 해제';
+                document.getElementById('connectBtn').classList.replace('bg-emerald-700', 'bg-rose-600');
+                document.getElementById('connectBtn').classList.replace('hover:bg-emerald-800', 'hover:bg-rose-700');
+                updateStatus(`연결됨 (${selectedBaud} bps)`, 'bg-emerald-100 text-emerald-800', 'bg-emerald-500');
+                document.getElementById('rawSerialMonitor').textContent = '데이터 수신 대기 중 (약 2초 소요)...';
+
+                keepReading = true;
+                readLoop();
+            } catch (err) {
+                console.error('연결 에러:', err);
+                port = null;
+                if (err.name !== 'NotFoundError') {
+                    showNotification("포트를 열 수 없습니다. 아두이노 IDE를 종료하고 USB를 다시 꽂아주세요. (" + err.message + ")");
+                }
+            }
+        }
+
+        async function disconnectArduino() {
+            keepReading = false;
+            if (reader) {
+                try { await reader.cancel(); } catch (e) {}
+            }
+            if (readableStreamClosed) {
+                try { await readableStreamClosed.catch(() => {}); } catch (e) {}
+            }
+            if (port) {
+                try { await port.close(); } catch (e) {}
+                port = null;
+            }
+
+            document.getElementById('connectBtnText').textContent = '아두이노 연결하기';
+            document.getElementById('connectBtn').classList.replace('bg-rose-600', 'bg-emerald-700');
+            document.getElementById('connectBtn').classList.replace('hover:bg-rose-700', 'hover:bg-emerald-800');
+            updateStatus('연결 대기 중', 'bg-slate-100 text-slate-600', 'bg-rose-500');
+            document.getElementById('rawSerialMonitor').textContent = '연결 해제됨';
+        }
+
+        function updateStatus(text, badgeClass, dotClass) {
+            const badge = document.getElementById('statusBadge');
+            badge.className = `flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${badgeClass}`;
+            document.getElementById('statusDot').className = `w-2 h-2 rounded-full ${dotClass}`;
+            document.getElementById('statusText').textContent = text;
+        }
+
+        async function readLoop() {
+            while (port && port.readable && keepReading) {
+                const textDecoder = new TextDecoderStream();
+                readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+                reader = textDecoder.readable.getReader();
+
+                let buffer = '';
+                try {
+                    while (keepReading) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buffer += value;
+                        let lines = buffer.split('\n');
+                        for (let i = 0; i < lines.length - 1; i++) {
+                            let line = lines[i].trim();
+                            if (line) processData(line);
+                        }
+                        buffer = lines[lines.length - 1];
+                    }
+                } catch (error) {
+                    console.error('읽기 에러 발생:', error);
+                } finally {
+                    reader.releaseLock();
+                }
+            }
+        }
+
+        // 만능 데이터 파서 (JSON 포맷 + 라이브러리 기본 예제 텍스트까지 모두 인식)
+        function processData(line) {
+            if (!isDashboardUnlocked) return;
+            document.getElementById('rawSerialMonitor').textContent = line;
+
+            try {
+                const startIdx = line.indexOf('{');
+                const endIdx = line.lastIndexOf('}');
+
+                if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                    const data = JSON.parse(line.substring(startIdx, endIdx + 1));
+                    updateDashboardUI(data);
+                    return;
+                }
+
+                let matched = false;
+                const pmMatch = line.match(/PM2\.5\s*[:=]\s*(\d+)/i);
+                if (pmMatch) { fallbackData.pm25 = Number(pmMatch[1]); matched = true; }
+
+                const co2Match = line.match(/CO2\s*[:=]\s*(\d+)/i);
+                if (co2Match) { fallbackData.co2 = Number(co2Match[1]); matched = true; }
+
+                const vocMatch = line.match(/VOC\s*[:=]\s*(\d+)/i);
+                if (vocMatch) { fallbackData.voc = Number(vocMatch[1]); matched = true; }
+
+                const tempMatch = line.match(/(?:TEMP|Temperature)\s*[:=]\s*([0-9.-]+)/i);
+                if (tempMatch) { fallbackData.temp = Number(tempMatch[1]); matched = true; }
+
+                const humiMatch = line.match(/(?:HUMI|Humidity)\s*[:=]\s*([0-9.-]+)/i);
+                if (humiMatch) { fallbackData.humi = Number(humiMatch[1]); matched = true; }
+
+                if (matched && (fallbackData.pm25 !== undefined || fallbackData.co2 !== undefined)) {
+                    updateDashboardUI(fallbackData);
+                }
+            } catch (e) {
+                // 파싱 오류 무시
+            }
+        }
+
+        function updateDashboardUI(data) {
+            const now = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+
+            if (data.pm25 !== undefined) document.getElementById('val-pm25').textContent = data.pm25;
+            if (data.co2 !== undefined) document.getElementById('val-co2').textContent = data.co2;
+            if (data.voc !== undefined) document.getElementById('val-voc').textContent = data.voc;
+            if (data.ph !== undefined) document.getElementById('val-ph').textContent = Number(data.ph).toFixed(2);
+            if (data.temp !== undefined) document.getElementById('val-temp').textContent = Number(data.temp).toFixed(1);
+            if (data.humi !== undefined) document.getElementById('val-humi').textContent = Number(data.humi).toFixed(1);
+            if (data.wtemp !== undefined) document.getElementById('val-wtemp').textContent = Number(data.wtemp).toFixed(1);
+
+            if (data.lat !== undefined && data.lat !== 0) {
+                document.getElementById('val-lat').textContent = Number(data.lat).toFixed(6);
+            }
+            if (data.lng !== undefined && data.lng !== 0) {
+                document.getElementById('val-lng').textContent = Number(data.lng).toFixed(6);
+            }
+
+            pollutionChart.data.labels.push(now);
+            pollutionChart.data.datasets[0].data.push(data.pm25 ?? null);
+            pollutionChart.data.datasets[1].data.push(data.co2 ?? null);
+            pollutionChart.data.datasets[2].data.push(data.voc ?? null);
+            pollutionChart.data.datasets[3].data.push(data.ph ?? null);
+
+            if (pollutionChart.data.labels.length > maxDataPoints) {
+                pollutionChart.data.labels.shift();
+                pollutionChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+            pollutionChart.update();
+
+            climateChart.data.labels.push(now);
+            climateChart.data.datasets[0].data.push(data.temp ?? null);
+            climateChart.data.datasets[1].data.push(data.wtemp ?? null);
+            climateChart.data.datasets[2].data.push(data.humi ?? null);
+
+            if (climateChart.data.labels.length > maxDataPoints) {
+                climateChart.data.labels.shift();
+                climateChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+            climateChart.update();
+
+            dataHistory.push({
+                time: now,
+                pm25: data.pm25 ?? '',
+                co2: data.co2 ?? '',
+                voc: data.voc ?? '',
+                ph: data.ph ?? '',
+                temp: data.temp ?? '',
+                humi: data.humi ?? '',
+                wtemp: data.wtemp ?? '',
+                lat: data.lat ?? '',
+                lng: data.lng ?? ''
+            });
+        }
+
+        function clearAllData() {
+            if (!isDashboardUnlocked) return;
+            pollutionChart.data.labels = [];
+            pollutionChart.data.datasets.forEach(ds => ds.data = []);
+            pollutionChart.update();
+
+            climateChart.data.labels = [];
+            climateChart.data.datasets.forEach(ds => ds.data = []);
+            climateChart.update();
+
+            dataHistory = [];
+            fallbackData = {};
+            ['pm25', 'co2', 'voc', 'ph', 'temp', 'humi', 'wtemp'].forEach(id => {
+                document.getElementById(`val-${id}`).textContent = '--';
+            });
+            document.getElementById('val-lat').textContent = '수신 대기중';
+            document.getElementById('val-lng').textContent = '수신 대기중';
+        }
+
+        function openGoogleMaps() {
+            if (!isDashboardUnlocked) return;
+            const lat = document.getElementById('val-lat').textContent;
+            const lng = document.getElementById('val-lng').textContent;
+            if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+                showNotification('아직 유효한 GPS 좌표가 수신되지 않았습니다.');
+                return;
+            }
+            window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+        }
+
+        function downloadCSV(type) {
+            if (!isDashboardUnlocked) return;
+            if (dataHistory.length === 0) {
+                showNotification('저장할 데이터가 없습니다.');
+                return;
+            }
+            let csv = "data:text/csv;charset=utf-8,\uFEFF";
+            if (type === 'pollution') {
+                csv += "시간,미세먼지(ug/m3),이산화탄소(ppm),VOC(Lv),수질(pH)\n";
+                dataHistory.forEach(r => { csv += `${r.time},${r.pm25},${r.co2},${r.voc},${r.ph}\n`; });
+            } else if (type === 'climate') {
+                csv += "시간,대기온도(C),습도(%),수온(C)\n";
+                dataHistory.forEach(r => { csv += `${r.time},${r.temp},${r.humi},${r.wtemp}\n`; });
+            } else {
+                csv += "시간,미세먼지(ug/m3),이산화탄소(ppm),VOC(Lv),수질(pH),대기온도(C),습도(%),수온(C),위도,경도\n";
+                dataHistory.forEach(r => { csv += `${r.time},${r.pm25},${r.co2},${r.voc},${r.ph},${r.temp},${r.humi},${r.wtemp},${r.lat},${r.lng}\n`; });
+            }
+            const link = document.createElement('a');
+            link.href = encodeURI(csv);
+            link.download = `환경탐구_${type}_${new Date().toLocaleTimeString('ko-KR')}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadChartImage(canvasId, filename) {
+            if (!isDashboardUnlocked) return;
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // 초기 실행 시 스프레드시트 인증 먼저 수행
+        verifySpreadsheetAccess();
+    </script>
+</body>
+</html>
