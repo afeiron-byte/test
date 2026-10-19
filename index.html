@@ -78,14 +78,64 @@
 </head>
 <body class="flex items-center justify-center min-h-screen text-slate-800">
 
+    <!-- 구글 스프레드시트 A1셀('2026') 검증 및 잠금 오버레이 -->
+    <div id="access-gate-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 transition-all duration-300">
+        
+        <!-- 1. 검증 중 상태 카드 -->
+        <div id="gate-loading" class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-slate-100 flex flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 shadow-sm">
+                <i data-lucide="loader-2" class="w-8 h-8 animate-spin"></i>
+            </div>
+            <h2 class="text-lg font-extrabold text-slate-800">스프레드시트 접속 확인 중</h2>
+            <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                구글 스프레드시트 <strong>'시트1' A1셀</strong>의<br>
+                활성화 코드(<strong class="text-emerald-600">2026</strong>)를 조회하고 있습니다...
+            </p>
+        </div>
+
+        <!-- 2. 비활성화(잠김) 상태 카드 (A1 != 2026) -->
+        <div id="gate-locked" class="hidden bg-white rounded-3xl p-7 max-w-md w-full text-center shadow-2xl border border-rose-100 flex-col items-center animate-in fade-in zoom-in duration-200">
+            <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3.5 shadow-sm">
+                <i data-lucide="lock" class="w-7 h-7"></i>
+            </div>
+            <h2 class="text-lg font-extrabold text-slate-800">탐구활동지가 비활성화되어 있습니다</h2>
+            <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                연결된 구글 스프레드시트 <strong>'시트1'의 A1셀</strong>에 정확히 <strong class="text-emerald-700 font-extrabold underline decoration-emerald-400">2026</strong>이 입력되어 있어야 작동합니다.
+            </p>
+
+            <!-- 실시간 수신된 값 표시 영역 (2027 등 원인 명확히 표시) -->
+            <div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl w-full text-left">
+                <div class="text-[10px] font-bold text-slate-400 mb-1 flex items-center justify-between">
+                    <span>스프레드시트 응답 상태</span>
+                    <span class="text-rose-500 font-extrabold">인증 불일치</span>
+                </div>
+                <div id="gate-status-detail" class="text-xs font-mono font-bold text-slate-700 break-all bg-white p-2 rounded-lg border border-slate-200/80">
+                    수신 대기 중...
+                </div>
+            </div>
+
+            <div class="mt-3 text-[11px] text-slate-500 text-left bg-amber-50 p-2.5 rounded-xl border border-amber-200/70 space-y-1">
+                <p class="font-bold text-amber-800 flex items-center gap-1">
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i> 확인 팁:
+                </p>
+                <p>1. 구글 시트 <strong>A1셀에 2026을 입력 후 반드시 Enter</strong>를 쳐서 입력을 완료하세요.</p>
+                <p>2. 시트 이름이 공백 없는 <strong>'시트1'</strong>인지 확인해 주세요.</p>
+            </div>
+
+            <button onclick="verifySpreadsheetAccess()" class="mt-4 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-2.5 px-5 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-[0.98]">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i> 다시 확인하기
+            </button>
+        </div>
+    </div>
+
     <!-- 커스텀 알림 토스트 (alert 대체용) -->
     <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold transition-all">
         <i data-lucide="bell" class="w-4 h-4 text-emerald-400 shrink-0"></i>
         <span id="toast-message">알림 메시지</span>
     </div>
 
-    <!-- 메인 대시보드 컨테이너 -->
-    <div id="main-dashboard-container" class="aspect-16-9-container lg:rounded-2xl border border-emerald-100 transition-all duration-300">
+    <!-- 메인 대시보드 컨테이너 (인증 통과 전에는 클릭 방지 및 블러 처리) -->
+    <div id="main-dashboard-container" class="aspect-16-9-container lg:rounded-2xl border border-emerald-100 pointer-events-none select-none filter blur-sm transition-all duration-300">
         
         <!-- 상단 헤더 -->
         <header class="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-100 shrink-0">
@@ -237,7 +287,7 @@
                         <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold text-xs flex items-center justify-center">3</span>
                         <h2 class="font-bold text-white text-sm">맞춤형 아두이노 코드</h2>
                     </div>
-                    <button onclick="copyCode()" id="btn-copy" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
+                    <button onclick="copyCode()" id="btn-copy" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95">
                         <i data-lucide="copy" class="w-3.5 h-3.5"></i> 코드 복사
                     </button>
                 </div>
@@ -427,15 +477,19 @@
 
     <script>
         // =========================================================================
-        // [구글 스프레드시트 설정] 주소 변경 시 아래 상수의 값을 수정하세요.
+        // [구글 스프레드시트 인증 설정] 
+        // 시트1의 A1셀에 정확히 아래 활성화 코드('2026')가 입력되어 있어야 대시보드가 열립니다.
+        // 다른 주소로 변경하려면 아래 URL 값을 변경하세요.
         // =========================================================================
         const GOOGLE_SPREADSHEET_URL = "https://script.google.com/macros/s/AKfycbzIk47D9_UDHYOVLGaSR7VMaNlOXGphI-NFLYXzKwVJRrUDegBbsDHPgRav2AesrWZy/exec";
+        const REQUIRED_AUTH_CODE = "2026";
         // =========================================================================
 
-        // Lucide 아이콘 초기화
         lucide.createIcons();
 
-        // 커스텀 알림 토스트 (alert 대체)
+        let isDashboardUnlocked = false;
+
+        // 커스텀 알림 토스트 (alert 대체용)
         let toastTimeout = null;
         function showNotification(message) {
             const toast = document.getElementById('toast-notification');
@@ -450,6 +504,120 @@
             }, 3500);
         }
 
+        /**
+         * 수신된 스프레드시트 응답 데이터에서 오직 'A1'셀의 실제 단일 값만 정밀 추출하는 함수
+         * (기존 코드처럼 다른 셀이나 헤더에 2026이 포함되어 오인증되던 버그를 완벽히 차단)
+         */
+        function extractA1Value(data) {
+            if (data === null || data === undefined) return '';
+            
+            // 1. 숫자형/불리언형 단일 값
+            if (typeof data === 'number' || typeof data === 'boolean') {
+                return String(data).trim();
+            }
+
+            // 2. 문자열
+            if (typeof data === 'string') {
+                const trimmed = data.trim();
+                // JSON 형태 문자열인지 체크하여 파싱 후 재귀 추출
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        return extractA1Value(parsed);
+                    } catch (_) {
+                        return trimmed;
+                    }
+                }
+                return trimmed;
+            }
+
+            // 3. 2차원 또는 1차원 배열 형태인 경우 [행][열] -> (0행 0열이 A1)
+            if (Array.isArray(data)) {
+                if (data.length === 0) return '';
+                if (Array.isArray(data[0])) {
+                    return extractA1Value(data[0][0]);
+                }
+                return extractA1Value(data[0]);
+            }
+
+            // 4. 객체 형태인 경우 A1 관련 명시적 필드만 엄격히 조회
+            if (typeof data === 'object') {
+                if ('A1' in data) return extractA1Value(data['A1']);
+                if ('a1' in data) return extractA1Value(data['a1']);
+                if ('시트1' in data) return extractA1Value(data['시트1']);
+                if ('value' in data) return extractA1Value(data['value']);
+                if ('result' in data) return extractA1Value(data['result']);
+                if ('data' in data) return extractA1Value(data['data']);
+            }
+
+            return String(data).trim();
+        }
+
+        async function verifySpreadsheetAccess() {
+            const overlay = document.getElementById('access-gate-overlay');
+            const loadingBox = document.getElementById('gate-loading');
+            const lockedBox = document.getElementById('gate-locked');
+            const statusDetail = document.getElementById('gate-status-detail');
+            const mainContainer = document.getElementById('main-dashboard-container');
+
+            // 오버레이 및 로딩 표시
+            overlay.classList.remove('hidden');
+            loadingBox.classList.remove('hidden');
+            loadingBox.classList.add('flex');
+            lockedBox.classList.add('hidden');
+            lockedBox.classList.remove('flex');
+
+            try {
+                // 브라우저 캐시 방지를 위해 timestamp + no-store 옵션 강제 적용
+                const url = `${GOOGLE_SPREADSHEET_URL}?sheet=${encodeURIComponent('시트1')}&cell=A1&_nocache=${Date.now()}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: {
+                        'Pragma': 'no-cache',
+                        'Cache-Control': 'no-cache'
+                    },
+                    redirect: 'follow'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`웹앱 연결 응답 실패 (HTTP ${response.status})`);
+                }
+
+                const rawText = await response.text();
+                const actualA1 = extractA1Value(rawText);
+
+                // 오직 추출된 A1 셀의 값이 '2026'일 때만 활성화!
+                if (actualA1 === REQUIRED_AUTH_CODE) {
+                    isDashboardUnlocked = true;
+                    overlay.classList.add('hidden');
+                    mainContainer.classList.remove('pointer-events-none', 'select-none', 'blur-sm');
+                    renderBuilder();
+                    showNotification('인증 완료: 에코 마스터 대시보드가 활성화되었습니다.');
+                } else {
+                    // 2027 등 불일치 시 잠금 화면 유지 및 현재 수신된 값 표시
+                    isDashboardUnlocked = false;
+                    loadingBox.classList.add('hidden');
+                    loadingBox.classList.remove('flex');
+                    lockedBox.classList.remove('hidden');
+                    lockedBox.classList.add('flex');
+                    mainContainer.classList.add('pointer-events-none', 'select-none', 'blur-sm');
+
+                    const displayValue = actualA1 !== '' ? actualA1 : '(빈 셀 또는 데이터 없음)';
+                    statusDetail.innerHTML = `수신된 A1셀 값: <span class="text-rose-600 font-extrabold">[${displayValue}]</span> <br><span class="text-[11px] text-slate-500 font-normal">필요 코드 [${REQUIRED_AUTH_CODE}]와 일치하지 않아 잠금 상태입니다.</span>`;
+                }
+            } catch (err) {
+                console.error('스프레드시트 인증 오류:', err);
+                isDashboardUnlocked = false;
+                loadingBox.classList.add('hidden');
+                loadingBox.classList.remove('flex');
+                lockedBox.classList.remove('hidden');
+                lockedBox.classList.add('flex');
+                mainContainer.classList.add('pointer-events-none', 'select-none', 'blur-sm');
+                statusDetail.innerHTML = `<span class="text-rose-600 font-bold">오류 발생:</span> ${err.message}<br><span class="text-[11px] text-slate-500 font-normal">인터넷 연결 및 구글 웹앱 URL 상태를 확인해 주세요.</span>`;
+            }
+        }
+
         // ==================== 센서 조립소 및 탭 제어 ====================
         const selectedSensors = {
             am1008: true,
@@ -460,6 +628,10 @@
         };
 
         function switchTab(tabId) {
+            if (!isDashboardUnlocked) {
+                showNotification('탐구활동지가 비활성화 상태입니다. 먼저 활성화 인증을 완료해 주세요.');
+                return;
+            }
             const builder = document.getElementById('tab-builder');
             const station = document.getElementById('tab-station');
             const btnBuilder = document.getElementById('btn-tab-builder');
@@ -482,6 +654,7 @@
         }
 
         function toggleSensor(key) {
+            if (!isDashboardUnlocked) return;
             selectedSensors[key] = !selectedSensors[key];
             const card = document.getElementById(`card-${key}`);
             const chk = document.getElementById(`chk-${key}`);
@@ -702,6 +875,7 @@
         }
 
         function copyCode() {
+            if (!isDashboardUnlocked) return;
             const code = document.getElementById('arduino-code').textContent;
             try {
                 const textarea = document.createElement('textarea');
@@ -723,6 +897,7 @@
             }
         }
 
+        // ==================== Chart.js 설정 ====================
         const whiteBgPlugin = {
             id: 'customCanvasBackgroundColor',
             beforeDraw: (chart) => {
@@ -829,6 +1004,7 @@
             climateChart.update();
         }
 
+        // ==================== 아두이노 Web Serial 통신 ====================
         let port = null;
         let reader = null;
         let readableStreamClosed = null;
@@ -838,6 +1014,7 @@
         let fallbackData = {};
 
         async function toggleArduinoConnection() {
+            if (!isDashboardUnlocked) return;
             if (port) {
                 await disconnectArduino();
             } else {
@@ -927,6 +1104,7 @@
         }
 
         function processData(line) {
+            if (!isDashboardUnlocked) return;
             document.getElementById('rawSerialMonitor').textContent = line;
 
             try {
@@ -1019,6 +1197,7 @@
         }
 
         function clearAllData() {
+            if (!isDashboardUnlocked) return;
             pollutionChart.data.labels = [];
             pollutionChart.data.datasets.forEach(ds => ds.data = []);
             pollutionChart.update();
@@ -1034,9 +1213,11 @@
             });
             document.getElementById('val-lat').textContent = '수신 대기중';
             document.getElementById('val-lng').textContent = '수신 대기중';
+            showNotification('관측 데이터가 초기화되었습니다.');
         }
 
         function openGoogleMaps() {
+            if (!isDashboardUnlocked) return;
             const lat = document.getElementById('val-lat').textContent;
             const lng = document.getElementById('val-lng').textContent;
             if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
@@ -1047,6 +1228,7 @@
         }
 
         function downloadCSV(type) {
+            if (!isDashboardUnlocked) return;
             if (dataHistory.length === 0) {
                 showNotification('저장할 데이터가 없습니다.');
                 return;
@@ -1071,6 +1253,7 @@
         }
 
         function downloadChartImage(canvasId, filename) {
+            if (!isDashboardUnlocked) return;
             const canvas = document.getElementById(canvasId);
             const link = document.createElement('a');
             link.download = filename;
@@ -1078,8 +1261,8 @@
             link.click();
         }
 
-        // 초기 화면 센서 조립소 즉시 렌더링
-        renderBuilder();
+        // 페이지 로드 시 구글 스프레드시트 검증 시작
+        verifySpreadsheetAccess();
     </script>
 </body>
 </html>
