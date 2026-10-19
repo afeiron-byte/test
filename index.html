@@ -12,13 +12,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Pretendard Font -->
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-    
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
         body {
             font-family: 'Pretendard', sans-serif;
             background-color: #f0fdf4;
@@ -34,7 +28,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.94);
             backdrop-filter: blur(12px);
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
         }
@@ -51,12 +45,8 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        .sensor-card { 
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-        }
-        .sensor-card:hover { 
-            transform: translateY(-2px); 
-        }
+        .sensor-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sensor-card:hover { transform: translateY(-2px); }
         .sensor-card.active {
             border-color: #10b981;
             background-color: #ecfdf5;
@@ -76,53 +66,61 @@
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen text-slate-800">
+<body class="flex items-center justify-center min-h-screen text-slate-800 select-none">
 
-    <!-- 활성화 코드 검증 및 잠금 오버레이 -->
+    <!-- 활성화 코드 인증 및 잠금 오버레이 -->
     <div id="access-gate-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 transition-all duration-300">
+        <!-- 확인 중 상태 -->
+        <div id="gate-loading" class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-emerald-100 flex flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                <i data-lucide="loader-2" class="w-8 h-8 animate-spin"></i>
+            </div>
+            <h2 class="text-lg font-extrabold text-slate-800">활성화 확인 중</h2>
+            <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">활성화 코드를 검증하고 있습니다...</p>
+        </div>
 
-        <!-- 2. 비활성화(잠김) 상태 카드 -->
-        <div id="gate-locked" class="hidden bg-white rounded-3xl p-7 max-w-md w-full text-center shadow-2xl border border-rose-100 flex-col items-center animate-in fade-in zoom-in duration-200">
-            <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3.5 shadow-sm">
-                <i data-lucide="lock" class="w-7 h-7"></i>
+        <!-- 잠금 상태 (불일치 또는 통신 오류) -->
+        <div id="gate-locked" class="hidden bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl border border-rose-100 flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                <i data-lucide="lock" class="w-8 h-8"></i>
             </div>
             <h2 class="text-lg font-extrabold text-slate-800">탐구활동지가 비활성화되어 있습니다</h2>
-            <p class="text-xs text-slate-600 mt-2 leading-relaxed">
-                정확한 활성화 코드가 필요합니다.
+            <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                정확한 활성화 코드를 입력해야만 작동합니다.
             </p>
 
-            <!-- 실시간 수신된 코드 상태 표시 영역 -->
-            <div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl w-full text-left">
-                <div class="text-[10px] font-bold text-slate-400 mb-1 flex items-center justify-between">
+            <div class="mt-4 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-left w-full">
+                <div class="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1">
                     <span>인증 상태</span>
-                    <span class="text-rose-500 font-extrabold">인증 불일치</span>
+                    <span id="gate-status-badge" class="text-rose-500">인증 불일치</span>
                 </div>
-                <div id="gate-status-detail" class="text-xs font-mono font-bold text-slate-700 break-all bg-white p-2 rounded-lg border border-slate-200/80">
-                    수신 대기 중...
+                <div id="gate-status-detail" class="text-xs font-mono text-slate-700 break-all leading-snug">
+                    확인 대기 중
                 </div>
             </div>
 
-            <!-- 확인 안내 영역 -->
-            <div class="mt-3 text-[11px] text-slate-500 text-left bg-amber-50 p-2.5 rounded-xl border border-amber-200/70 space-y-1">
-                <p class="font-bold text-amber-800 flex items-center gap-1">
+            <div class="mt-3 p-3 bg-amber-50 border border-amber-200/60 rounded-xl text-left w-full text-xs text-amber-800 space-y-1">
+                <div class="font-bold flex items-center gap-1">
                     <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i> 확인 안내:
+                </div>
+                <p class="text-[11px] text-amber-700 leading-relaxed">
+                    활성화 코드를 확인하고 정확하게 입력해 주세요.
                 </p>
-                <p>활성화 코드를 확인하고 정확하게 입력해 주세요.</p>
             </div>
 
-            <button onclick="verifySpreadsheetAccess()" class="mt-4 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-2.5 px-5 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-[0.98]">
+            <button onclick="verifySpreadsheetAccess()" class="mt-5 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3 px-5 rounded-xl shadow-md shadow-emerald-200 transition-all">
                 <i data-lucide="refresh-cw" class="w-4 h-4"></i> 다시 확인하기
             </button>
         </div>
     </div>
 
-    <!-- 커스텀 알림 토스트 (alert 대체용) -->
+    <!-- 커스텀 알림 토스트 -->
     <div id="toast-notification" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2.5 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold transition-all">
         <i data-lucide="bell" class="w-4 h-4 text-emerald-400 shrink-0"></i>
         <span id="toast-message">알림 메시지</span>
     </div>
 
-    <!-- 메인 대시보드 컨테이너 (인증 통과 전에는 클릭 방지 및 블러 처리) -->
+    <!-- 메인 대시보드 컨테이너 -->
     <div id="main-dashboard-container" class="aspect-16-9-container lg:rounded-2xl border border-emerald-100 pointer-events-none select-none filter blur-sm transition-all duration-300">
         
         <!-- 상단 헤더 -->
@@ -158,7 +156,7 @@
         <!-- ==================== 탭 1: 센서 조립소 ==================== -->
         <main id="tab-builder" class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-5 overflow-hidden">
             
-            <!-- 1열: 센서 선택 (3칸) -->
+            <!-- 1열: 센서 선택 -->
             <section class="lg:col-span-3 flex flex-col bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm overflow-hidden">
                 <div class="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 shrink-0">
                     <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-xs flex items-center justify-center">1</span>
@@ -167,7 +165,6 @@
                 </div>
 
                 <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                    <!-- AM1008W-K -->
                     <div onclick="toggleSensor('am1008')" id="card-am1008" class="sensor-card active cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
                         <div class="p-2 rounded-lg bg-teal-100 text-teal-600 shrink-0 mt-0.5"><i data-lucide="wind" class="w-5 h-5"></i></div>
                         <div class="flex-1 min-w-0">
@@ -184,7 +181,6 @@
                         </div>
                     </div>
 
-                    <!-- SEN0161 pH -->
                     <div onclick="toggleSensor('ph')" id="card-ph" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
                         <div class="p-2 rounded-lg bg-purple-100 text-purple-600 shrink-0 mt-0.5"><i data-lucide="flask-conical" class="w-5 h-5"></i></div>
                         <div class="flex-1 min-w-0">
@@ -197,7 +193,6 @@
                         </div>
                     </div>
 
-                    <!-- DS18B20 방수온도 -->
                     <div onclick="toggleSensor('ds18b20')" id="card-ds18b20" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
                         <div class="p-2 rounded-lg bg-indigo-100 text-indigo-600 shrink-0 mt-0.5"><i data-lucide="waves" class="w-5 h-5"></i></div>
                         <div class="flex-1 min-w-0">
@@ -210,7 +205,6 @@
                         </div>
                     </div>
 
-                    <!-- SZH-EK024 온습도 -->
                     <div onclick="toggleSensor('dht')" id="card-dht" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
                         <div class="p-2 rounded-lg bg-orange-100 text-orange-600 shrink-0 mt-0.5"><i data-lucide="thermometer-sun" class="w-5 h-5"></i></div>
                         <div class="flex-1 min-w-0">
@@ -223,7 +217,6 @@
                         </div>
                     </div>
 
-                    <!-- NEO-6M GPS -->
                     <div onclick="toggleSensor('gps')" id="card-gps" class="sensor-card cursor-pointer p-3 rounded-xl border-2 border-slate-200 flex items-start gap-3">
                         <div class="p-2 rounded-lg bg-blue-100 text-blue-600 shrink-0 mt-0.5"><i data-lucide="satellite" class="w-5 h-5"></i></div>
                         <div class="flex-1 min-w-0">
@@ -238,9 +231,8 @@
                 </div>
             </section>
 
-            <!-- 2열: 회로 연결 가이드 & 필수 라이브러리 (5칸) -->
+            <!-- 2열: 회로 연결 가이드 -->
             <section class="lg:col-span-5 flex flex-col gap-4 overflow-hidden">
-                <!-- 회로 연결 가이드 -->
                 <div class="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm overflow-hidden">
                     <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-100 shrink-0">
                         <div class="flex items-center gap-2">
@@ -249,12 +241,9 @@
                         </div>
                         <span class="text-[11px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">5V / GND는 브레드보드 공유</span>
                     </div>
-                    <div id="wiring-guide" class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                        <!-- JS 렌더링 -->
-                    </div>
+                    <div id="wiring-guide" class="flex-1 overflow-y-auto space-y-2.5 pr-1"></div>
                 </div>
 
-                <!-- 라이브러리 설치 안내 -->
                 <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm shrink-0">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
@@ -262,20 +251,18 @@
                             <h3 class="font-bold text-slate-800 text-xs">설치 필요 라이브러리 (아두이노 IDE 라이브러리 매니저)</h3>
                         </div>
                     </div>
-                    <div id="lib-guide" class="flex flex-wrap gap-2">
-                        <!-- JS 렌더링 -->
-                    </div>
+                    <div id="lib-guide" class="flex flex-wrap gap-2"></div>
                 </div>
             </section>
 
-            <!-- 3열: 맞춤형 아두이노 코드 (4칸) -->
+            <!-- 3열: 자동 생성 아두이노 코드 -->
             <section class="lg:col-span-4 flex flex-col bg-slate-900 rounded-2xl border border-slate-800 p-4 shadow-sm overflow-hidden text-slate-100">
                 <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800 shrink-0">
                     <div class="flex items-center gap-2">
                         <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold text-xs flex items-center justify-center">3</span>
                         <h2 class="font-bold text-white text-sm">맞춤형 아두이노 코드</h2>
                     </div>
-                    <button onclick="copyCode()" id="btn-copy" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95">
+                    <button onclick="copyCode()" id="btn-copy" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
                         <i data-lucide="copy" class="w-3.5 h-3.5"></i> 코드 복사
                     </button>
                 </div>
@@ -290,7 +277,6 @@
             <!-- 상단 컨트롤 바 -->
             <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-sm shrink-0">
                 <div class="flex items-center gap-2.5">
-                    <!-- 통신 속도(Baudrate) 선택 -->
                     <div class="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200">
                         <span class="text-[11px] font-bold text-slate-500">통신속도:</span>
                         <select id="baudRateSelect" class="bg-transparent text-xs font-extrabold text-slate-800 focus:outline-none cursor-pointer">
@@ -311,16 +297,14 @@
                     </button>
                 </div>
 
-                <!-- 실시간 원본 시리얼 수신 확인 모니터 -->
                 <div class="flex items-center gap-2 bg-slate-900 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-mono max-w-md truncate border border-slate-700">
                     <span class="text-slate-400 font-sans font-bold text-[11px] shrink-0">수신 데이터:</span>
                     <span id="rawSerialMonitor" class="truncate">아두이노 연결 대기 중...</span>
                 </div>
             </div>
 
-            <!-- 실시간 센서 측정값 요약 카드 (7열) -->
+            <!-- 요약 카드 (7열) -->
             <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2.5 shrink-0">
-                <!-- PM2.5 -->
                 <div class="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-slate-500">미세먼지 (PM2.5)</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -329,7 +313,6 @@
                     </div>
                     <i data-lucide="cloud-fog" class="w-8 h-8 text-slate-200 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- CO2 -->
                 <div class="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-emerald-700">이산화탄소 (CO2)</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -338,7 +321,6 @@
                     </div>
                     <i data-lucide="cloud" class="w-8 h-8 text-emerald-200/70 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- VOC -->
                 <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-amber-700">유기화합물 (VOC)</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -347,7 +329,6 @@
                     </div>
                     <i data-lucide="sparkles" class="w-8 h-8 text-amber-200/70 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- pH -->
                 <div class="bg-purple-50/80 border border-purple-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-purple-700">수질 (pH)</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -356,7 +337,6 @@
                     </div>
                     <i data-lucide="flask-conical" class="w-8 h-8 text-purple-200/70 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- 대기 온도 -->
                 <div class="bg-orange-50/80 border border-orange-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-orange-700">현재 온도</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -365,7 +345,6 @@
                     </div>
                     <i data-lucide="thermometer" class="w-8 h-8 text-orange-200/70 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- 대기 습도 -->
                 <div class="bg-sky-50/80 border border-sky-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-sky-700">현재 습도</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -374,7 +353,6 @@
                     </div>
                     <i data-lucide="droplets" class="w-8 h-8 text-sky-200/70 absolute right-2 bottom-1"></i>
                 </div>
-                <!-- 방수 수온 -->
                 <div class="bg-indigo-50/80 border border-indigo-200/80 rounded-2xl p-3 flex flex-col justify-between relative overflow-hidden">
                     <span class="text-[11px] font-bold text-indigo-700">수온 (방수 온도)</span>
                     <div class="my-1 flex items-baseline gap-1">
@@ -385,10 +363,8 @@
                 </div>
             </div>
 
-            <!-- 하단 그래프 및 GPS 영역 -->
+            <!-- 하단 그래프 및 GPS -->
             <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
-                
-                <!-- 그래프 1: 대기/수질 오염도 -->
                 <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col min-h-0">
                     <div class="flex items-center justify-between mb-2 shrink-0">
                         <div class="flex items-center gap-1.5">
@@ -409,7 +385,6 @@
                     </div>
                 </div>
 
-                <!-- 그래프 2: 온습도/수온 변화 -->
                 <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col min-h-0">
                     <div class="flex items-center justify-between mb-2 shrink-0">
                         <div class="flex items-center gap-1.5">
@@ -430,7 +405,6 @@
                     </div>
                 </div>
 
-                <!-- 우측: GPS 위치 정보 패널 -->
                 <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex flex-col justify-between min-h-0">
                     <div>
                         <div class="flex items-center gap-1.5 mb-3 pb-2 border-b border-slate-100">
@@ -465,19 +439,16 @@
 
     <script>
         // =========================================================================
-        // [구글 스프레드시트 인증 설정] 
-        // 시트1의 A1셀에 정확히 아래 활성화 코드('2026')가 입력되어 있어야 대시보드가 열립니다.
-        // 다른 주소로 변경하려면 아래 URL 값을 변경하세요.
+        // [설정 영역] 활성화 코드 확인 URL 및 타깃 코드 설정
+        // - [해결책 1 권장]: 구글 시트 [파일] ➔ [공유] ➔ [웹에 게시] ➔ '시트1' ➔ 'CSV' 링크 사용
+        // - 기존 Apps Script 배포 URL도 호환됩니다.
         // =========================================================================
-        const GOOGLE_SPREADSHEET_URL = "https://script.google.com/macros/s/AKfycbzIk47D9_UDHYOVLGaSR7VMaNlOXGphI-NFLYXzKwVJRrUDegBbsDHPgRav2AesrWZy/exec";
+        const SPREADSHEET_AUTH_URL = "https://script.google.com/macros/s/AKfycbzIk47D9_UDHYOVLGaSR7VMaNlOXGphI-NFLYXzKwVJRrUDegBbsDHPgRav2AesrWZy/exec";
         const REQUIRED_AUTH_CODE = "2026";
-        // =========================================================================
-
-        lucide.createIcons();
 
         let isDashboardUnlocked = false;
+        lucide.createIcons();
 
-        // 커스텀 알림 토스트 (alert 대체용)
         let toastTimeout = null;
         function showNotification(message) {
             const toast = document.getElementById('toast-notification');
@@ -492,53 +463,40 @@
             }, 3500);
         }
 
-        /**
-         * 수신된 스프레드시트 응답 데이터에서 오직 'A1'셀의 실제 단일 값만 정밀 추출하는 함수
-         * (기존 코드처럼 다른 셀이나 헤더에 2026이 포함되어 오인증되던 버그를 완벽히 차단)
-         */
-        function extractA1Value(data) {
-            if (data === null || data === undefined) return '';
-            
-            // 1. 숫자형/불리언형 단일 값
-            if (typeof data === 'number' || typeof data === 'boolean') {
-                return String(data).trim();
+        // ==================== A1셀 활성화 코드 추출 및 검증 ====================
+        function extractA1FromResponse(rawText) {
+            if (!rawText) return null;
+            const trimmed = rawText.trim();
+
+            // 1. 순수 텍스트/숫자 (예: "2026")
+            if (/^\d+$/.test(trimmed)) return trimmed;
+
+            // 2. CSV 형식 (쉼표/줄바꿈 기준 첫 번째 항목 추출)
+            if (trimmed.includes(',') || trimmed.includes('\n')) {
+                const firstLine = trimmed.split(/\r?\n/)[0];
+                const firstVal = firstLine.split(',')[0].replace(/^["']|["']$/g, '').trim();
+                if (firstVal) return firstVal;
             }
 
-            // 2. 문자열
-            if (typeof data === 'string') {
-                const trimmed = data.trim();
-                // JSON 형태 문자열인지 체크하여 파싱 후 재귀 추출
-                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        return extractA1Value(parsed);
-                    } catch (_) {
-                        return trimmed;
+            // 3. JSON 구조 분석
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (typeof parsed === 'number' || typeof parsed === 'string') return String(parsed).trim();
+                if (Array.isArray(parsed)) {
+                    const row1 = Array.isArray(parsed[0]) ? parsed[0][0] : parsed[0];
+                    return row1 !== undefined ? String(row1).trim() : null;
+                }
+                if (typeof parsed === 'object' && parsed !== null) {
+                    const candidateKeys = ['A1', 'a1', '시트1', 'value', 'code', 'result', 'data'];
+                    for (const k of candidateKeys) {
+                        if (k in parsed) return String(parsed[k]).trim();
                     }
+                    const firstVal = Object.values(parsed)[0];
+                    if (firstVal !== undefined) return String(firstVal).trim();
                 }
-                return trimmed;
-            }
+            } catch (_) {}
 
-            // 3. 2차원 또는 1차원 배열 형태인 경우 [행][열] -> (0행 0열이 A1)
-            if (Array.isArray(data)) {
-                if (data.length === 0) return '';
-                if (Array.isArray(data[0])) {
-                    return extractA1Value(data[0][0]);
-                }
-                return extractA1Value(data[0]);
-            }
-
-            // 4. 객체 형태인 경우 A1 관련 명시적 필드만 엄격히 조회
-            if (typeof data === 'object') {
-                if ('A1' in data) return extractA1Value(data['A1']);
-                if ('a1' in data) return extractA1Value(data['a1']);
-                if ('시트1' in data) return extractA1Value(data['시트1']);
-                if ('value' in data) return extractA1Value(data['value']);
-                if ('result' in data) return extractA1Value(data['result']);
-                if ('data' in data) return extractA1Value(data['data']);
-            }
-
-            return String(data).trim();
+            return trimmed.length > 50 ? trimmed.slice(0, 50) + "..." : trimmed;
         }
 
         async function verifySpreadsheetAccess() {
@@ -546,9 +504,9 @@
             const loadingBox = document.getElementById('gate-loading');
             const lockedBox = document.getElementById('gate-locked');
             const statusDetail = document.getElementById('gate-status-detail');
+            const statusBadge = document.getElementById('gate-status-badge');
             const mainContainer = document.getElementById('main-dashboard-container');
 
-            // 오버레이 및 로딩 표시
             overlay.classList.remove('hidden');
             loadingBox.classList.remove('hidden');
             loadingBox.classList.add('flex');
@@ -556,38 +514,39 @@
             lockedBox.classList.remove('flex');
 
             try {
-                // 커스텀 헤더(Cache-Control 등)를 제거하여 Google Apps Script CORS Preflight 차단 오류(Failed to fetch) 방지
-                const url = `${GOOGLE_SPREADSHEET_URL}?sheet=${encodeURIComponent('시트1')}&cell=A1&t=${Date.now()}`;
-                const response = await fetch(url, {
+                const sep = SPREADSHEET_AUTH_URL.includes('?') ? '&' : '?';
+                const cacheBuster = `t=${Date.now()}`;
+                const fetchUrl = SPREADSHEET_AUTH_URL.includes('output=csv')
+                    ? `${SPREADSHEET_AUTH_URL}${sep}${cacheBuster}`
+                    : `${SPREADSHEET_AUTH_URL}${sep}sheet=${encodeURIComponent('시트1')}&cell=A1&${cacheBuster}`;
+
+                const response = await fetch(fetchUrl, {
                     method: 'GET',
                     redirect: 'follow'
                 });
 
                 if (!response.ok) {
-                    throw new Error(`웹앱 연결 응답 실패 (HTTP ${response.status})`);
+                    throw new Error(`서버 응답 오류 (HTTP ${response.status})`);
                 }
 
                 const rawText = await response.text();
-                const actualA1 = extractA1Value(rawText);
+                const extractedValue = extractA1FromResponse(rawText);
 
-                // 오직 추출된 A1 셀의 값이 '2026'일 때만 활성화!
-                if (actualA1 === REQUIRED_AUTH_CODE) {
+                if (extractedValue === REQUIRED_AUTH_CODE) {
                     isDashboardUnlocked = true;
                     overlay.classList.add('hidden');
                     mainContainer.classList.remove('pointer-events-none', 'select-none', 'blur-sm');
                     renderBuilder();
-                    showNotification('인증 완료: 에코 마스터 대시보드가 활성화되었습니다.');
+                    showNotification("인증 성공: 탐구활동지가 활성화되었습니다.");
                 } else {
-                    // 불일치 시 잠금 화면 유지 및 현재 수신된 코드 상태 표시
                     isDashboardUnlocked = false;
                     loadingBox.classList.add('hidden');
                     loadingBox.classList.remove('flex');
                     lockedBox.classList.remove('hidden');
                     lockedBox.classList.add('flex');
-                    mainContainer.classList.add('pointer-events-none', 'select-none', 'blur-sm');
-
-                    const displayValue = actualA1 !== '' ? actualA1 : '(코드 없음)';
-                    statusDetail.innerHTML = `수신된 코드: <span class="text-rose-600 font-extrabold">[${displayValue}]</span> <br><span class="text-[11px] text-slate-500 font-normal">활성화 코드가 일치하지 않아 잠금 상태입니다.</span>`;
+                    statusBadge.textContent = "코드 불일치";
+                    statusBadge.className = "text-rose-500 font-bold";
+                    statusDetail.innerHTML = `수신된 코드: <strong class="text-rose-600 bg-rose-50 px-1 py-0.5 rounded">[${extractedValue ?? '빈 값'}]</strong>`;
                 }
             } catch (err) {
                 console.error('인증 확인 오류:', err);
@@ -596,8 +555,9 @@
                 loadingBox.classList.remove('flex');
                 lockedBox.classList.remove('hidden');
                 lockedBox.classList.add('flex');
-                mainContainer.classList.add('pointer-events-none', 'select-none', 'blur-sm');
-                statusDetail.innerHTML = `<span class="text-rose-600 font-bold">오류 발생:</span> ${err.message}<br><span class="text-[11px] text-slate-500 font-normal">네트워크 연결 상태를 확인하고 다시 시도해 주세요.</span>`;
+                statusBadge.textContent = "통신 차단됨";
+                statusBadge.className = "text-rose-600 font-bold";
+                statusDetail.innerHTML = `<span class="text-rose-600 font-bold">오류: ${err.message}</span><br><span class="text-slate-400 text-[11px]">교육청 도메인 정책 차단 또는 브라우저 보안 제한입니다.</span>`;
             }
         }
 
@@ -611,10 +571,7 @@
         };
 
         function switchTab(tabId) {
-            if (!isDashboardUnlocked) {
-                showNotification('탐구활동지가 비활성화 상태입니다. 먼저 활성화 인증을 완료해 주세요.');
-                return;
-            }
+            if (!isDashboardUnlocked) return;
             const builder = document.getElementById('tab-builder');
             const station = document.getElementById('tab-station');
             const btnBuilder = document.getElementById('btn-tab-builder');
@@ -713,31 +670,6 @@
                             <span class="pin-chip"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>DAT ➔ <strong class="text-blue-600">D5</strong></span>
                         </div>
                     </div>
-                    <div class="bg-white p-2 rounded-lg border border-indigo-100">
-                        <div class="text-[11px] font-bold text-indigo-700 mb-1 flex items-center gap-1">
-                            <span>ⓘ 터미널 모듈 연결 안내 (풀업 저항 내장형)</span>
-                        </div>
-                        <svg viewBox="0 0 500 115" class="w-full h-auto">
-                            <rect x="10" y="42" width="110" height="28" rx="14" fill="#94a3b8" stroke="#64748b" stroke-width="2"/>
-                            <rect x="110" y="40" width="55" height="32" fill="#334155"/>
-                            <path d="M 165 56 C 215 56, 215 15, 250 15 C 285 15, 285 95, 320 95 C 350 95, 350 56, 375 56" fill="none" stroke="#334155" stroke-width="10" stroke-linecap="round"/>
-                            <line x1="375" y1="42" x2="405" y2="42" stroke="#eab308" stroke-width="3.5"/>
-                            <line x1="375" y1="56" x2="405" y2="56" stroke="#ef4444" stroke-width="3.5"/>
-                            <line x1="375" y1="70" x2="405" y2="70" stroke="#1e293b" stroke-width="3.5"/>
-                            <rect x="395" y="12" width="85" height="90" rx="8" fill="#1e293b"/>
-                            <text x="437" y="24" fill="#cbd5e1" font-size="7" text-anchor="middle" font-weight="bold">Pluggable Terminal</text>
-                            <rect x="405" y="30" width="26" height="52" fill="#22c55e" stroke="#15803d" stroke-width="1.5"/>
-                            <circle cx="418" cy="42" r="4.5" fill="#cbd5e1"/><line x1="415" y1="42" x2="421" y2="42" stroke="#475569" stroke-width="1.5"/>
-                            <circle cx="418" cy="56" r="4.5" fill="#cbd5e1"/><line x1="415" y1="56" x2="421" y2="56" stroke="#475569" stroke-width="1.5"/>
-                            <circle cx="418" cy="70" r="4.5" fill="#cbd5e1"/><line x1="415" y1="70" x2="421" y2="70" stroke="#475569" stroke-width="1.5"/>
-                            <text x="458" y="45" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">DAT</text>
-                            <text x="458" y="59" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">VCC</text>
-                            <text x="458" y="73" fill="#f8fafc" font-size="8" font-weight="bold" text-anchor="end">GND</text>
-                            <line x1="463" y1="42" x2="495" y2="42" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
-                            <line x1="463" y1="56" x2="495" y2="56" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
-                            <line x1="463" y1="70" x2="495" y2="70" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
-                        </svg>
-                    </div>
                 </div>`;
             }
 
@@ -827,7 +759,7 @@
                 code += `  waterSensor.requestTemperatures();\n`;
             }
 
-            code += `\n  // 웹 대시보드로 JSON 데이터 전송\n  Serial.print("{");\n`;
+            code += `\n  // 웹사이트로 JSON 데이터 전송\n  Serial.print("{");\n`;
 
             let fields = [];
             if (selectedSensors.am1008) {
@@ -860,14 +792,7 @@
         function copyCode() {
             if (!isDashboardUnlocked) return;
             const code = document.getElementById('arduino-code').textContent;
-            try {
-                const textarea = document.createElement('textarea');
-                textarea.value = code;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-
+            navigator.clipboard.writeText(code).then(() => {
                 const btn = document.getElementById('btn-copy');
                 btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 복사 완료!`;
                 lucide.createIcons();
@@ -875,9 +800,7 @@
                     btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> 코드 복사`;
                     lucide.createIcons();
                 }, 2000);
-            } catch(e) {
-                showNotification('코드 복사에 실패했습니다.');
-            }
+            });
         }
 
         // ==================== Chart.js 설정 ====================
@@ -987,7 +910,7 @@
             climateChart.update();
         }
 
-        // ==================== 아두이노 Web Serial 통신 ====================
+        // ==================== Web Serial API 시리얼 통신 ====================
         let port = null;
         let reader = null;
         let readableStreamClosed = null;
@@ -1007,10 +930,6 @@
 
         async function connectArduino() {
             try {
-                if (!navigator.serial) {
-                    showNotification('현재 브라우저가 Web Serial API를 지원하지 않습니다. Chrome 또는 Edge 브라우저를 이용해 주세요.');
-                    return;
-                }
                 const selectedBaud = parseInt(document.getElementById('baudRateSelect').value, 10);
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: selectedBaud });
@@ -1027,7 +946,7 @@
                 console.error('연결 에러:', err);
                 port = null;
                 if (err.name !== 'NotFoundError') {
-                    showNotification("포트를 열 수 없습니다. 아두이노 IDE의 시리얼 모니터를 닫고 USB를 다시 꽂아주세요. (" + err.message + ")");
+                    showNotification("포트를 열 수 없습니다. 아두이노 IDE를 종료하고 USB를 다시 꽂아주세요. (" + err.message + ")");
                 }
             }
         }
@@ -1119,9 +1038,7 @@
                 if (matched && (fallbackData.pm25 !== undefined || fallbackData.co2 !== undefined)) {
                     updateDashboardUI(fallbackData);
                 }
-            } catch (e) {
-                // 파싱 오류 무시
-            }
+            } catch (e) {}
         }
 
         function updateDashboardUI(data) {
@@ -1196,7 +1113,6 @@
             });
             document.getElementById('val-lat').textContent = '수신 대기중';
             document.getElementById('val-lng').textContent = '수신 대기중';
-            showNotification('관측 데이터가 초기화되었습니다.');
         }
 
         function openGoogleMaps() {
@@ -1244,7 +1160,7 @@
             link.click();
         }
 
-        // 페이지 로드 시 구글 스프레드시트 검증 시작
+        // 초기 구동
         verifySpreadsheetAccess();
     </script>
 </body>
